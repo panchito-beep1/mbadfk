@@ -29,7 +29,7 @@ local Tweens = {
 -- Setup Root GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "EliteLibraryGui"
-ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Parent = CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.ResetOnSpawn = false
 
