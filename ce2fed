@@ -664,6 +664,7 @@ function Library:CreateWindow(titleText, toggleKey)
             end)
         end
 
+        -- FIXED DROPDOWN (OptionContainer at Y offset 38)
         function Tab:CreateDropdown(text, options, callback)
             local DropBtn = Instance.new("TextButton", Page)
             DropBtn.BackgroundColor3 = Colors.ElementBg
@@ -696,10 +697,11 @@ function Library:CreateWindow(titleText, toggleKey)
             Arrow.TextSize = 14
             Arrow.TextXAlignment = Enum.TextXAlignment.Center
 
+            -- FIXED: Position at Y=38 offset (not scale 1)
             local OptionContainer = Instance.new("Frame", DropBtn)
             OptionContainer.BackgroundColor3 = Colors.ElementBg
-            OptionContainer.Position = UDim2.new(0, 0, 1, 0) -- below button's initial area
-            OptionContainer.Size = UDim2.new(1, 0, 0, 0) -- start collapsed
+            OptionContainer.Position = UDim2.new(0, 0, 0, 38)  -- starts right below the header
+            OptionContainer.Size = UDim2.new(1, 0, 0, 0)      -- start collapsed
             OptionContainer.ClipsDescendants = true
             Instance.new("UICorner", OptionContainer).CornerRadius = UDim.new(0, 6)
             Instance.new("UIStroke", OptionContainer).Color = Colors.Stroke
@@ -746,8 +748,11 @@ function Library:CreateWindow(titleText, toggleKey)
             DropBtn.MouseButton1Click:Connect(function()
                 isOpen = not isOpen
                 local totalHeight = isOpen and (#options * optionHeight) or 0
+                -- Expand the button height to reveal the container
                 TweenService:Create(DropBtn, Tweens.Medium, {Size = UDim2.new(1, 0, 0, 38 + totalHeight)}):Play()
+                -- Expand the container itself
                 TweenService:Create(OptionContainer, Tweens.Medium, {Size = UDim2.new(1, 0, 0, totalHeight)}):Play()
+                -- Rotate arrow
                 TweenService:Create(Arrow, Tweens.Fast, {Rotation = isOpen and 180 or 0}):Play()
             end)
         end
