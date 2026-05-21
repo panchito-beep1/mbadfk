@@ -739,6 +739,8 @@ function Tab:CreateDropdown(text, options, callback)
                 TweenService:Create(DropBtn, Tweens.Medium, {Size = UDim2.new(1, 0, 0, 38)}):Play()
                 TweenService:Create(OptionContainer, Tweens.Fast, {Size = UDim2.new(1, 0, 0, 0)}):Play()
                 TweenService:Create(Arrow, Tweens.Fast, {Rotation = 0}):Play()
+                print("Callback:", callback, typeof(callback))
+                if callback then
                 pcall(callback, option)
             end)
         end
