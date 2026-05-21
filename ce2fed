@@ -1,3 +1,5 @@
+print("DEADEADA", tick())
+
 local Library = {}
 
 -- Services
