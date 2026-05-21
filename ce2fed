@@ -1,5 +1,3 @@
-print("DEADEADA", tick())
-
 local Library = {}
 
 -- Services
@@ -666,100 +664,93 @@ function Library:CreateWindow(titleText, toggleKey)
             end)
         end
 
-function Tab:CreateDropdown(text, options, callback)
-    local DropBtn = Instance.new("TextButton", Page)
-    DropBtn.BackgroundColor3 = Colors.ElementBg
-    DropBtn.Size = UDim2.new(1, 0, 0, 38) -- initial height
-    DropBtn.Text = ""
-    DropBtn.AutoButtonColor = false
-    DropBtn.ClipsDescendants = true  -- keep to hide overflowing options during animation
-    Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 6)
+        function Tab:CreateDropdown(text, options, callback)
+            local DropBtn = Instance.new("TextButton", Page)
+            DropBtn.BackgroundColor3 = Colors.ElementBg
+            DropBtn.Size = UDim2.new(1, 0, 0, 38)
+            DropBtn.Text = ""
+            DropBtn.AutoButtonColor = false
+            Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 6)
 
-    local DropStroke = Instance.new("UIStroke", DropBtn)
-    DropStroke.Color = Colors.Stroke
+            local DropStroke = Instance.new("UIStroke", DropBtn)
+            DropStroke.Color = Colors.Stroke
 
-    local Label = Instance.new("TextLabel", DropBtn)
-    Label.BackgroundTransparency = 1
-    Label.Position = UDim2.new(0, 15, 0, 0)
-    Label.Size = UDim2.new(1, -30, 0, 38) -- fixed height for label
-    Label.Font = Enum.Font.GothamSemibold
-    Label.Text = text .. " : --"
-    Label.TextColor3 = Colors.Text
-    Label.TextSize = 14
-    Label.TextXAlignment = Enum.TextXAlignment.Left
+            local Label = Instance.new("TextLabel", DropBtn)
+            Label.BackgroundTransparency = 1
+            Label.Position = UDim2.new(0, 15, 0, 0)
+            Label.Size = UDim2.new(1, -30, 1, 0)
+            Label.Font = Enum.Font.GothamSemibold
+            Label.Text = text .. " : --"
+            Label.TextColor3 = Colors.Text
+            Label.TextSize = 14
+            Label.TextXAlignment = Enum.TextXAlignment.Left
 
-    local Arrow = Instance.new("TextLabel", DropBtn)
-    Arrow.BackgroundTransparency = 1
-    Arrow.Position = UDim2.new(1, -25, 0, 0)
-    Arrow.Size = UDim2.new(0, 20, 0, 38)
-    Arrow.Font = Enum.Font.GothamBold
-    Arrow.Text = "▼"
-    Arrow.TextColor3 = Colors.TextDark
-    Arrow.TextSize = 14
-    Arrow.TextXAlignment = Enum.TextXAlignment.Center
+            local Arrow = Instance.new("TextLabel", DropBtn)
+            Arrow.BackgroundTransparency = 1
+            Arrow.Position = UDim2.new(1, -25, 0, 0)
+            Arrow.Size = UDim2.new(0, 20, 1, 0)
+            Arrow.Font = Enum.Font.GothamBold
+            Arrow.Text = "▼"
+            Arrow.TextColor3 = Colors.TextDark
+            Arrow.TextSize = 14
+            Arrow.TextXAlignment = Enum.TextXAlignment.Center
 
-    local OptionContainer = Instance.new("Frame", DropBtn)
-    OptionContainer.BackgroundColor3 = Colors.ElementBg
-    OptionContainer.Position = UDim2.new(0, 0, 1, 0) -- placed just below the button's initial area
-    OptionContainer.Size = UDim2.new(1, 0, 0, 0) -- start collapsed
-    OptionContainer.ClipsDescendants = true
-    Instance.new("UICorner", OptionContainer).CornerRadius = UDim.new(0, 6)
-    Instance.new("UIStroke", OptionContainer).Color = Colors.Stroke
+            local OptionContainer = Instance.new("Frame", DropBtn)
+            OptionContainer.BackgroundColor3 = Colors.ElementBg
+            OptionContainer.Position = UDim2.new(0, 0, 1, 2)
+            OptionContainer.Size = UDim2.new(1, 0, 0, 0)
+            OptionContainer.ClipsDescendants = true
+            Instance.new("UICorner", OptionContainer).CornerRadius = UDim.new(0, 6)
+            Instance.new("UIStroke", OptionContainer).Color = Colors.Stroke
 
-    local OptionList = Instance.new("UIListLayout", OptionContainer)
-    OptionList.SortOrder = Enum.SortOrder.LayoutOrder
+            local OptionList = Instance.new("UIListLayout", OptionContainer)
+            OptionList.SortOrder = Enum.SortOrder.LayoutOrder
 
-    local isOpen = false
-    local optionHeight = 30 -- height of each option
+            local isOpen = false
+            DropBtn.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                local totalHeight = isOpen and (#options * 30) or 0
+                TweenService:Create(OptionContainer, Tweens.Medium, {Size = UDim2.new(1, 0, 0, totalHeight)}):Play()
+                TweenService:Create(Arrow, Tweens.Fast, {Rotation = isOpen and 180 or 0}):Play()
+            end)
 
-    -- Helper to rebuild options
-    local function rebuildOptions()
-        for _, child in ipairs(OptionContainer:GetChildren()) do
-            if child:IsA("TextButton") then child:Destroy() end
+            -- Clear old options and recreate
+            local function refreshOptions()
+                for _, child in ipairs(OptionContainer:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+                for _, option in ipairs(options) do
+                    local OptionBtn = Instance.new("TextButton", OptionContainer)
+                    OptionBtn.BackgroundColor3 = Colors.TabOff
+                    OptionBtn.Size = UDim2.new(1, 0, 0, 30)
+                    OptionBtn.Font = Enum.Font.Gotham
+                    OptionBtn.Text = option
+                    OptionBtn.TextColor3 = Colors.TextDark
+                    OptionBtn.TextSize = 13
+                    OptionBtn.AutoButtonColor = false
+                    Instance.new("UICorner", OptionBtn)
+
+                    OptionBtn.MouseEnter:Connect(function()
+                        TweenService:Create(OptionBtn, Tweens.Fast, {BackgroundColor3 = Colors.ElementHover}):Play()
+                    end)
+                    OptionBtn.MouseLeave:Connect(function()
+                        TweenService:Create(OptionBtn, Tweens.Fast, {BackgroundColor3 = Colors.TabOff}):Play()
+                    end)
+                    OptionBtn.MouseButton1Click:Connect(function()
+                        Label.Text = text .. " : " .. option
+                        isOpen = false
+                        TweenService:Create(OptionContainer, Tweens.Medium, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+                        TweenService:Create(Arrow, Tweens.Fast, {Rotation = 0}):Play()
+                        pcall(callback, option)
+                    end)
+                end
+            end
+
+            refreshOptions()
         end
-        for _, option in ipairs(options) do
-            local OptionBtn = Instance.new("TextButton", OptionContainer)
-            OptionBtn.BackgroundColor3 = Colors.TabOff
-            OptionBtn.Size = UDim2.new(1, 0, 0, optionHeight)
-            OptionBtn.Font = Enum.Font.Gotham
-            OptionBtn.Text = option
-            OptionBtn.TextColor3 = Colors.TextDark
-            OptionBtn.TextSize = 13
-            OptionBtn.AutoButtonColor = false
-            Instance.new("UICorner", OptionBtn)
 
-            OptionBtn.MouseEnter:Connect(function()
-                TweenService:Create(OptionBtn, Tweens.Fast, {BackgroundColor3 = Colors.ElementHover}):Play()
-            end)
-            OptionBtn.MouseLeave:Connect(function()
-                TweenService:Create(OptionBtn, Tweens.Fast, {BackgroundColor3 = Colors.TabOff}):Play()
-            end)
-            OptionBtn.MouseButton1Click:Connect(function()
-                Label.Text = text .. " : " .. option
-                isOpen = false
-                -- Collapse the button height
-                TweenService:Create(DropBtn, Tweens.Medium, {Size = UDim2.new(1, 0, 0, 38)}):Play()
-                TweenService:Create(OptionContainer, Tweens.Fast, {Size = UDim2.new(1, 0, 0, 0)}):Play()
-                TweenService:Create(Arrow, Tweens.Fast, {Rotation = 0}):Play()
-                print("Callback:", callback, typeof(callback))
-                if callback then
-                pcall(callback, option)
-            end)
-        end
+        return Tab
     end
-    rebuildOptions()
-
-    DropBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        local totalHeight = isOpen and (#options * optionHeight) or 0
-
-        -- Smoothly expand/collapse the button's height
-        TweenService:Create(DropBtn, Tweens.Medium, {Size = UDim2.new(1, 0, 0, 38 + totalHeight)}):Play()
-        -- Also expand the options container to reveal them
-        TweenService:Create(OptionContainer, Tweens.Medium, {Size = UDim2.new(1, 0, 0, totalHeight)}):Play()
-        TweenService:Create(Arrow, Tweens.Fast, {Rotation = isOpen and 180 or 0}):Play()
-    end)
-end
 
     -- Window utilities
     function Window:SetScale(scaleValue)
