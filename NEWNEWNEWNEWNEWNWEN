@@ -1,0 +1,1028 @@
+-- Aero UI Library v2
+-- Focus: stronger visuals, smoother animations, premium motion, and cleaner component styling.
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local Aero = {}
+Aero.__index = Aero
+
+local THEME = {
+	Background = Color3.fromRGB(12, 12, 15),
+	Window = Color3.fromRGB(17, 17, 21),
+	Panel = Color3.fromRGB(20, 20, 25),
+	Panel2 = Color3.fromRGB(26, 26, 33),
+	Stroke = Color3.fromRGB(52, 52, 62),
+	Text = Color3.fromRGB(246, 246, 248),
+	SubText = Color3.fromRGB(159, 159, 172),
+	Accent = Color3.fromRGB(255, 64, 67),
+	Accent2 = Color3.fromRGB(255, 138, 140),
+	AccentSoft = Color3.fromRGB(255, 90, 92),
+	Good = Color3.fromRGB(80, 220, 140),
+	Bad = Color3.fromRGB(255, 90, 90),
+}
+
+local function create(className, props)
+	local inst = Instance.new(className)
+	for k, v in pairs(props or {}) do
+		inst[k] = v
+	end
+	return inst
+end
+
+local function round(parent, radius)
+	return create("UICorner", {
+		CornerRadius = UDim.new(0, radius or 10),
+		Parent = parent,
+	})
+end
+
+local function stroke(parent, transparency, thickness)
+	return create("UIStroke", {
+		Color = THEME.Stroke,
+		Transparency = transparency or 0,
+		Thickness = thickness or 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = parent,
+	})
+end
+
+local function pad(parent, left, right, top, bottom)
+	return create("UIPadding", {
+		PaddingLeft = UDim.new(0, left or 0),
+		PaddingRight = UDim.new(0, right or 0),
+		PaddingTop = UDim.new(0, top or 0),
+		PaddingBottom = UDim.new(0, bottom or 0),
+		Parent = parent,
+	})
+end
+
+local function tween(obj, info, goal)
+	local t = TweenService:Create(obj, info, goal)
+	t:Play()
+	return t
+end
+
+local function attachGradientMotion(gradient, speed)
+	speed = speed or 10
+	local start = tick()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		if not gradient or not gradient.Parent then
+			if conn then conn:Disconnect() end
+			return
+		end
+		gradient.Rotation = ((tick() - start) * speed) % 360
+	end)
+	return conn
+end
+
+local function softenButton(btn, base, hover, press)
+	base = base or btn.BackgroundColor3
+	hover = hover or base:Lerp(Color3.new(1, 1, 1), 0.05)
+	press = press or base:Lerp(Color3.new(0, 0, 0), 0.08)
+	btn.BackgroundColor3 = base
+	local scale = btn:FindFirstChildOfClass("UIScale") or create("UIScale", { Scale = 1, Parent = btn })
+	btn.AutoButtonColor = false
+
+	btn.MouseEnter:Connect(function()
+		tween(btn, TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { BackgroundColor3 = hover })
+		tween(scale, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.03 })
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(btn, TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { BackgroundColor3 = base })
+		tween(scale, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
+	end)
+	btn.MouseButton1Down:Connect(function()
+		tween(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = press })
+		tween(scale, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.985 })
+	end)
+	btn.MouseButton1Up:Connect(function()
+		tween(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = hover })
+		tween(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.03 })
+	end)
+end
+
+local function revealGroup(group)
+	group.GroupTransparency = 1
+	group.Visible = true
+	tween(group, TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { GroupTransparency = 0 })
+end
+
+local function hideGroup(group)
+	local t = tween(group, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { GroupTransparency = 1 })
+	t.Completed:Connect(function()
+		if group then group.Visible = false end
+	end)
+end
+
+function Aero:Destroy()
+	for _, conn in ipairs(self._maid or {}) do
+		pcall(function() conn:Disconnect() end)
+	end
+	if self._blur then
+		self._blur:Destroy()
+	end
+	if self.ScreenGui then
+		self.ScreenGui:Destroy()
+	end
+end
+
+function Aero.new(config)
+	config = config or {}
+
+	local self = setmetatable({}, Aero)
+	self._maid = {}
+	self._tabs = {}
+	self._activeTab = nil
+	self._theme = table.clone(THEME)
+
+	self.ScreenGui = create("ScreenGui", {
+		Name = config.Name or "AeroUI",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = config.Parent or PlayerGui,
+	})
+
+	self._blur = create("BlurEffect", {
+		Name = "AeroBlur",
+		Size = 0,
+		Parent = Lighting,
+	})
+
+	self._maid[#self._maid + 1] = RunService.RenderStepped:Connect(function()
+		if self.ScreenGui and self.ScreenGui.Parent then
+			self._blur.Size = math.clamp(self._blur.Size, 0, 24)
+		end
+	end)
+
+	self.Backdrop = create("Frame", {
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Parent = self.ScreenGui,
+	})
+
+	self.WindowScale = create("UIScale", {
+		Scale = 0.95,
+		Parent = self.ScreenGui,
+	})
+
+	self.Window = create("CanvasGroup", {
+		Name = "Window",
+		BackgroundColor3 = self._theme.Window,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = config.Position or UDim2.fromScale(0.5, 0.5),
+		Size = config.Size or UDim2.fromOffset(780, 480),
+		GroupTransparency = 1,
+		Parent = self.ScreenGui,
+	})
+	round(self.Window, 16)
+	stroke(self.Window, 0.08, 1)
+
+	local windowGradient = create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 24, 30)),
+			ColorSequenceKeypoint.new(1, self._theme.Window),
+		}),
+		Rotation = 90,
+		Parent = self.Window,
+	})
+
+	local topStrip = create("Frame", {
+		BackgroundColor3 = self._theme.Accent,
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		Parent = self.Window,
+	})
+	local stripGradient = create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, self._theme.Accent),
+			ColorSequenceKeypoint.new(1, self._theme.Accent2),
+		}),
+		Rotation = 0,
+		Parent = topStrip,
+	})
+	attachGradientMotion(stripGradient, 18)
+
+	self.Grip = create("Frame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 44),
+		Parent = self.Window,
+	})
+
+	local titleShadow = create("TextLabel", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(20, 10),
+		Size = UDim2.new(1, -140, 0, 22),
+		Font = Enum.Font.GothamBlack,
+		Text = config.Title or "AERO",
+		TextColor3 = Color3.fromRGB(0, 0, 0),
+		TextTransparency = 0.72,
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = self.Window,
+	})
+
+	self.Title = create("TextLabel", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(19, 9),
+		Size = UDim2.new(1, -140, 0, 22),
+		Font = Enum.Font.GothamBlack,
+		Text = config.Title or "AERO",
+		TextColor3 = self._theme.Text,
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = self.Window,
+	})
+
+	local accentText = create("TextLabel", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(19, 29),
+		Size = UDim2.new(1, -140, 0, 14),
+		Font = Enum.Font.Gotham,
+		Text = config.SubTitle or "Premium motion, cleaner depth, sharper shine",
+		TextColor3 = self._theme.SubText,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = self.Window,
+	})
+
+	self.Close = create("TextButton", {
+		BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -46, 0, 9),
+		Size = UDim2.fromOffset(28, 28),
+		Font = Enum.Font.GothamBold,
+		Text = "✕",
+		TextColor3 = self._theme.SubText,
+		TextSize = 14,
+		Parent = self.Window,
+	})
+	round(self.Close, 9)
+	stroke(self.Close, 0.25, 1)
+	softenButton(self.Close, self.Close.BackgroundColor3, Color3.fromRGB(44, 44, 52), Color3.fromRGB(24, 24, 28))
+
+	self.Sidebar = create("Frame", {
+		BackgroundColor3 = self._theme.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(16, 54),
+		Size = UDim2.new(0, 178, 1, -70),
+		Parent = self.Window,
+	})
+	round(self.Sidebar, 14)
+	stroke(self.Sidebar, 0.12, 1)
+	pad(self.Sidebar, 10, 10, 10, 10)
+
+	local sidebarGlow = create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 24, 29)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 18, 21)),
+		}),
+		Rotation = 90,
+		Parent = self.Sidebar,
+	})
+
+	self.TabList = create("ScrollingFrame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = self._theme.Accent,
+		Parent = self.Sidebar,
+	})
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = self.TabList,
+	})
+
+	self.Pages = create("Frame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(206, 54),
+		Size = UDim2.new(1, -222, 1, -70),
+		Parent = self.Window,
+	})
+
+	local pagePad = create("Frame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Parent = self.Pages,
+	})
+
+	self._dragging = false
+	self._dragStart = nil
+	self._startPos = nil
+
+	self._maid[#self._maid + 1] = self.Grip.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			self._dragging = true
+			self._dragStart = input.Position
+			self._startPos = self.Window.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					self._dragging = false
+				end
+			end)
+		end
+	end)
+
+	self._maid[#self._maid + 1] = UserInputService.InputChanged:Connect(function(input)
+		if self._dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - self._dragStart
+			self.Window.Position = UDim2.new(
+				self._startPos.X.Scale,
+				self._startPos.X.Offset + delta.X,
+				self._startPos.Y.Scale,
+				self._startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	self._maid[#self._maid + 1] = self.Close.MouseButton1Click:Connect(function()
+		self:Destroy()
+	end)
+
+	self._maid[#self._maid + 1] = task.delay(0.06, function()
+		self._blur.Size = 18
+		tween(self.WindowScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
+		tween(self.Window, TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { GroupTransparency = 0 })
+		tween(self.Backdrop, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.45 })
+	end)
+
+	function self:_registerActive(tab)
+		for _, t in ipairs(self._tabs) do
+			local active = (t == tab)
+			local target = active and self._theme.Accent or self._theme.Panel2
+			local textColor = active and Color3.new(1, 1, 1) or self._theme.Text
+			tween(t.Button, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+				BackgroundColor3 = target,
+				TextColor3 = textColor,
+			})
+			if t.Indicator then
+				tween(t.Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+					BackgroundTransparency = active and 0 or 1,
+				})
+			end
+		end
+	end
+
+	function self:CreateTab(name)
+		local tab = {}
+		tab.Name = name or "Tab"
+		tab.Sections = {}
+
+		tab.Button = create("TextButton", {
+			Name = tab.Name,
+			BackgroundColor3 = self._theme.Panel2,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 36),
+			Font = Enum.Font.GothamSemibold,
+			Text = tab.Name,
+			TextColor3 = self._theme.Text,
+			TextSize = 14,
+			AutoButtonColor = false,
+			Parent = self.TabList,
+		})
+		round(tab.Button, 11)
+		stroke(tab.Button, 0.2, 1)
+		softenButton(tab.Button, tab.Button.BackgroundColor3, Color3.fromRGB(33, 33, 40), Color3.fromRGB(24, 24, 28))
+
+		tab.Indicator = create("Frame", {
+			BackgroundColor3 = self._theme.Accent,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Position = UDim2.new(0, 8, 1, -4),
+			Size = UDim2.new(1, -16, 0, 2),
+			Parent = tab.Button,
+		})
+		round(tab.Indicator, 999)
+
+		tab.Page = create("CanvasGroup", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 1),
+			Visible = false,
+			GroupTransparency = 1,
+			Parent = self.Pages,
+		})
+		create("UIListLayout", {
+			Padding = UDim.new(0, 12),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = tab.Page,
+		})
+		pad(tab.Page, 2, 4, 2, 2)
+
+		local columns = create("Frame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Parent = tab.Page,
+		})
+		create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 12),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = columns,
+		})
+
+		function tab:SetActive()
+			if self._activeTab and self._activeTab ~= tab then
+				hideGroup(self._activeTab.Page)
+			end
+			self._activeTab = tab
+			tab.Page.Visible = true
+			revealGroup(tab.Page)
+			self:_registerActive(tab)
+		end
+
+		tab.Button.MouseButton1Click:Connect(function()
+			tab:SetActive()
+		end)
+
+		function tab:CreateSection(sectionTitle, sectionDesc)
+			local section = {}
+			section.Elements = {}
+
+			section.Holder = create("Frame", {
+				BackgroundColor3 = self._theme.Panel,
+				BorderSizePixel = 0,
+				Size = UDim2.new(0.5, -6, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Parent = columns,
+			})
+			round(section.Holder, 14)
+			stroke(section.Holder, 0.12, 1)
+			pad(section.Holder, 14, 14, 14, 14)
+
+			local sectionGradient = create("UIGradient", {
+				Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 25, 31)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 24)),
+				}),
+				Rotation = 90,
+				Parent = section.Holder,
+			})
+
+			create("UIListLayout", {
+				Padding = UDim.new(0, 10),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Parent = section.Holder,
+			})
+
+			create("TextLabel", {
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 20),
+				Font = Enum.Font.GothamBold,
+				Text = sectionTitle or "Section",
+				TextColor3 = self._theme.Text,
+				TextSize = 16,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Parent = section.Holder,
+			})
+
+			if sectionDesc and sectionDesc ~= "" then
+				create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 16),
+					Font = Enum.Font.Gotham,
+					Text = sectionDesc,
+					TextColor3 = self._theme.SubText,
+					TextSize = 12,
+					TextWrapped = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Parent = section.Holder,
+				})
+			end
+
+			local function row(height)
+				return create("Frame", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, height),
+					Parent = section.Holder,
+				})
+			end
+
+			function section:AddLabel(text, subText)
+				local r = row(subText and 38 or 22)
+				create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 18),
+					Font = Enum.Font.GothamSemibold,
+					Text = text or "Label",
+					TextColor3 = self._theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Parent = r,
+				})
+				if subText then
+					create("TextLabel", {
+						BackgroundTransparency = 1,
+						BorderSizePixel = 0,
+						Position = UDim2.fromOffset(0, 18),
+						Size = UDim2.new(1, 0, 0, 14),
+						Font = Enum.Font.Gotham,
+						Text = subText,
+						TextColor3 = self._theme.SubText,
+						TextSize = 12,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						Parent = r,
+					})
+				end
+			end
+
+			function section:AddButton(opts)
+				opts = opts or {}
+				local r = row(40)
+				local btn = create("TextButton", {
+					BackgroundColor3 = self._theme.Accent,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(1, 1),
+					Font = Enum.Font.GothamSemibold,
+					Text = opts.Text or "Button",
+					TextColor3 = Color3.new(1, 1, 1),
+					TextSize = 14,
+					AutoButtonColor = false,
+					Parent = r,
+				})
+				round(btn, 12)
+				stroke(btn, 0.18, 1)
+				softenButton(btn, self._theme.Accent, self._theme.Accent2, self._theme.AccentSoft)
+
+				local sheen = create("Frame", {
+					BackgroundTransparency = 0.65,
+					BorderSizePixel = 0,
+					Rotation = 12,
+					Position = UDim2.new(-0.4, 0, -0.4, 0),
+					Size = UDim2.new(0.35, 0, 1.8, 0),
+					Parent = btn,
+				})
+				create("UIGradient", {
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 1),
+						NumberSequenceKeypoint.new(0.5, 0.72),
+						NumberSequenceKeypoint.new(1, 1),
+					}),
+					Rotation = 0,
+					Parent = sheen,
+				})
+
+				btn.MouseEnter:Connect(function()
+					tween(sheen, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+						Position = UDim2.new(1.1, 0, -0.4, 0),
+					})
+				end)
+
+				btn.MouseButton1Click:Connect(function()
+					if opts.Callback then opts.Callback() end
+				end)
+				return btn
+			end
+
+			function section:AddToggle(opts)
+				opts = opts or {}
+				local state = not not opts.Default
+				local r = row(36)
+
+				local box = create("Frame", {
+					BackgroundColor3 = state and self._theme.Accent or Color3.fromRGB(18, 18, 22),
+					BorderSizePixel = 0,
+					Position = UDim2.fromOffset(0, 6),
+					Size = UDim2.fromOffset(24, 24),
+					Parent = r,
+				})
+				round(box, 7)
+				stroke(box, 0.25, 1)
+
+				local tick = create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(1, 1),
+					Font = Enum.Font.GothamBold,
+					Text = "✓",
+					TextTransparency = state and 0 or 1,
+					TextColor3 = Color3.new(1, 1, 1),
+					TextSize = 14,
+					Parent = box,
+				})
+
+				local label = create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Position = UDim2.fromOffset(34, 0),
+					Size = UDim2.new(1, -34, 1, 0),
+					Font = Enum.Font.GothamSemibold,
+					Text = opts.Text or "Toggle",
+					TextColor3 = self._theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Parent = r,
+				})
+
+				local line = create("Frame", {
+					BackgroundColor3 = self._theme.Accent,
+					BackgroundTransparency = state and 0 or 1,
+					BorderSizePixel = 0,
+					Position = UDim2.new(0, 0, 1, -2),
+					Size = UDim2.new(1, 0, 0, 2),
+					Parent = box,
+				})
+				round(line, 999)
+
+				local function refresh()
+					tween(box, TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+						BackgroundColor3 = state and self._theme.Accent or Color3.fromRGB(18, 18, 22),
+					})
+					tween(tick, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						TextTransparency = state and 0 or 1,
+					})
+					tween(line, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						BackgroundTransparency = state and 0 or 1,
+					})
+				end
+
+				box.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						state = not state
+						refresh()
+						if opts.Callback then opts.Callback(state) end
+					end
+				end)
+				refresh()
+
+				return {
+					Set = function(_, value)
+						state = not not value
+						refresh()
+					end,
+					Get = function() return state end,
+				}
+			end
+
+			function section:AddSlider(opts)
+				opts = opts or {}
+				local min = opts.Min or 0
+				local max = opts.Max or 100
+				local value = math.clamp(opts.Default or min, min, max)
+				local r = create("Frame", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 56),
+					Parent = section.Holder,
+				})
+
+				create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, -72, 0, 18),
+					Font = Enum.Font.GothamSemibold,
+					Text = opts.Text or "Slider",
+					TextColor3 = self._theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Parent = r,
+				})
+
+				local valueLabel = create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Position = UDim2.new(1, -72, 0, 0),
+					Size = UDim2.fromOffset(72, 18),
+					Font = Enum.Font.Gotham,
+					Text = tostring(value),
+					TextColor3 = self._theme.SubText,
+					TextSize = 12,
+					TextXAlignment = Enum.TextXAlignment.Right,
+					Parent = r,
+				})
+
+				local bar = create("Frame", {
+					BackgroundColor3 = Color3.fromRGB(30, 30, 37),
+					BorderSizePixel = 0,
+					Position = UDim2.fromOffset(0, 30),
+					Size = UDim2.new(1, 0, 0, 10),
+					Parent = r,
+				})
+				round(bar, 999)
+				stroke(bar, 0.4, 1)
+
+				local fill = create("Frame", {
+					BackgroundColor3 = self._theme.Accent,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale((value - min) / (max - min), 1),
+					Parent = bar,
+				})
+				round(fill, 999)
+
+				local fillGlow = create("UIGradient", {
+					Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, self._theme.Accent),
+						ColorSequenceKeypoint.new(1, self._theme.Accent2),
+					}),
+					Rotation = 0,
+					Parent = fill,
+				})
+
+				local knob = create("TextButton", {
+					BackgroundColor3 = Color3.new(1, 1, 1),
+					BorderSizePixel = 0,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
+					Size = UDim2.fromOffset(14, 14),
+					Text = "",
+					Parent = bar,
+				})
+				round(knob, 999)
+				stroke(knob, 0.15, 1)
+
+				local glow = create("Frame", {
+					BackgroundColor3 = self._theme.Accent,
+					BackgroundTransparency = 0.72,
+					BorderSizePixel = 0,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
+					Size = UDim2.fromOffset(28, 28),
+					ZIndex = 0,
+					Parent = bar,
+				})
+				round(glow, 999)
+
+				local dragging = false
+				local function setValue(v)
+					value = math.clamp(math.floor(v + 0.5), min, max)
+					local alpha = (value - min) / (max - min)
+					fill.Size = UDim2.new(alpha, 0, 1, 0)
+					knob.Position = UDim2.new(alpha, 0, 0.5, 0)
+					glow.Position = UDim2.new(alpha, 0, 0.5, 0)
+					valueLabel.Text = tostring(value)
+					if opts.Callback then opts.Callback(value) end
+				end
+
+				local function updateFromInput(input)
+					local pct = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+					setValue(min + ((max - min) * math.clamp(pct, 0, 1)))
+				end
+
+				bar.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = true
+						updateFromInput(input)
+					end
+				end)
+				bar.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = false
+					end
+				end)
+				self._maid[#self._maid + 1] = UserInputService.InputChanged:Connect(function(input)
+					if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+						updateFromInput(input)
+					end
+				end)
+
+				setValue(value)
+				return {
+					Set = setValue,
+					Get = function() return value end,
+				}
+			end
+
+			function section:AddDropdown(opts)
+				opts = opts or {}
+				local items = opts.Items or {}
+				local selected = opts.Default or items[1]
+				local expanded = false
+				local r = create("Frame", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 40),
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Parent = section.Holder,
+				})
+
+				local btn = create("TextButton", {
+					BackgroundColor3 = self._theme.Panel2,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 40),
+					Font = Enum.Font.GothamSemibold,
+					Text = "",
+					AutoButtonColor = false,
+					Parent = r,
+				})
+				round(btn, 12)
+				stroke(btn, 0.22, 1)
+				softenButton(btn, self._theme.Panel2, Color3.fromRGB(32, 32, 39), Color3.fromRGB(22, 22, 27))
+
+				create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Position = UDim2.fromOffset(12, 0),
+					Size = UDim2.new(1, -40, 1, 0),
+					Font = Enum.Font.GothamSemibold,
+					Text = opts.Text or "Dropdown",
+					TextColor3 = self._theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Parent = btn,
+				})
+
+				local current = create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Position = UDim2.new(1, -168, 0, 0),
+					Size = UDim2.fromOffset(130, 40),
+					Font = Enum.Font.Gotham,
+					Text = selected and tostring(selected) or "Select",
+					TextColor3 = self._theme.SubText,
+					TextSize = 12,
+					TextXAlignment = Enum.TextXAlignment.Right,
+					Parent = btn,
+				})
+
+				local arrow = create("TextLabel", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Position = UDim2.new(1, -26, 0, 0),
+					Size = UDim2.fromOffset(14, 40),
+					Font = Enum.Font.GothamBold,
+					Text = "⌄",
+					TextColor3 = self._theme.SubText,
+					TextSize = 16,
+					Parent = btn,
+				})
+
+				local listHolder = create("Frame", {
+					BackgroundColor3 = self._theme.Panel2,
+					BorderSizePixel = 0,
+					ClipsDescendants = true,
+					Size = UDim2.new(1, 0, 0, 0),
+					Parent = r,
+				})
+				round(listHolder, 12)
+				stroke(listHolder, 0.25, 1)
+
+				local list = create("ScrollingFrame", {
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(1, 1),
+					CanvasSize = UDim2.new(),
+					AutomaticCanvasSize = Enum.AutomaticSize.Y,
+					ScrollBarThickness = 3,
+					ScrollBarImageColor3 = self._theme.Accent,
+					Visible = false,
+					Parent = listHolder,
+				})
+				pad(list, 8, 8, 8, 8)
+				create("UIListLayout", {
+					Padding = UDim.new(0, 6),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					Parent = list,
+				})
+
+				local function refreshHeight()
+					local count = #items
+					local h = math.min(8 + (count * 34) + math.max(0, count - 1) * 6, 220)
+					listHolder.Visible = expanded
+					list.Visible = expanded
+					arrow.Text = expanded and "⌃" or "⌄"
+					tween(listHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+						Size = UDim2.new(1, 0, 0, expanded and h or 0),
+					})
+				end
+
+				local function selectItem(item)
+					selected = item
+					current.Text = tostring(item)
+					if opts.Callback then opts.Callback(item) end
+				end
+
+				btn.MouseButton1Click:Connect(function()
+					expanded = not expanded
+					refreshHeight()
+				end)
+
+				local function rebuild(listItems)
+					for _, child in ipairs(list:GetChildren()) do
+						if child:IsA("TextButton") then child:Destroy() end
+					end
+					for _, item in ipairs(listItems) do
+						local opt = create("TextButton", {
+							BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+							BorderSizePixel = 0,
+							Size = UDim2.new(1, 0, 0, 30),
+							Font = Enum.Font.Gotham,
+							Text = tostring(item),
+							TextColor3 = self._theme.Text,
+							TextSize = 13,
+							AutoButtonColor = false,
+							Parent = list,
+						})
+						round(opt, 8)
+						softenButton(opt, Color3.fromRGB(30, 30, 36), Color3.fromRGB(38, 38, 45), Color3.fromRGB(24, 24, 28))
+						opt.MouseButton1Click:Connect(function()
+							selectItem(item)
+							expanded = false
+							refreshHeight()
+						end)
+					end
+				end
+
+				rebuild(items)
+				refreshHeight()
+				if selected then selectItem(selected) end
+
+				return {
+					Set = selectItem,
+					Get = function() return selected end,
+					Refresh = function(newItems)
+						items = newItems or {}
+						rebuild(items)
+						refreshHeight()
+					end,
+				}
+			end
+
+			return section
+		end
+
+		table.insert(self._tabs, tab)
+		if #self._tabs == 1 then
+			tab:SetActive()
+			self:_registerActive(tab)
+		end
+		return tab
+	end
+
+	function self:Show()
+		self.ScreenGui.Enabled = true
+		self.Window.Visible = true
+		self._blur.Size = 18
+		revealGroup(self.Window)
+		tween(self.Backdrop, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.45 })
+		tween(self.WindowScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
+	end
+
+	function self:Hide()
+		hideGroup(self.Window)
+		tween(self.Backdrop, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 })
+		tween(self.WindowScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.96 })
+		self._blur.Size = 0
+	end
+
+	function self:SetTheme(theme)
+		for k, v in pairs(theme or {}) do
+			if self._theme[k] ~= nil then
+				self._theme[k] = v
+			end
+		end
+	end
+
+	return self
+end
+
+function Aero.Create(config)
+	return Aero.new(config)
+end
+
+return Aero
+
+--[[
+Example:
+
+local Aero = require(path.to.Module)
+local UI = Aero.Create({
+	Title = "AERO",
+	SubTitle = "Glassy motion, sharper polish",
+})
+
+local main = UI:CreateTab("Main")
+local sec = main:CreateSection("Premium Features", "Clean visuals, lively motion, and richer depth")
+
+sec:AddToggle({ Text = "Enable Glow", Default = true, Callback = function(v) print(v) end })
+sec:AddButton({ Text = "Launch", Callback = function() print("clicked") end })
+sec:AddSlider({ Text = "Intensity", Min = 0, Max = 100, Default = 45, Callback = function(v) print(v) end })
+sec:AddDropdown({ Text = "Mode", Items = {"Soft", "Balanced", "Sharp"}, Callback = function(v) print(v) end })
+]]
